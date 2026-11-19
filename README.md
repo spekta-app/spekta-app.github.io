@@ -1,8 +1,8 @@
-# Espectroprocessamento
+# Spekta
 
 Aplicativo para processar em lote as leituras de espectrorradiômetro (arquivos `.SSM` do SpectraWiz/StellarNet). Ele roda direto no navegador, não precisa de instalação e não envia nenhum arquivo para a internet.
 
-**Acesse:** https://gabriel-rodrigues-silva.github.io/espectroprocessamento/
+**Acesse:** https://spekta-app.github.io/
 
 ## O que ele faz
 

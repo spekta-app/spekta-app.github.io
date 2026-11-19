@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Espectroprocessamento: converte leituras de espectrorradiômetro (.SSM) em refletância e médias, para qualquer cultura e delineamento.">
+<meta name="description" content="Spekta: converte leituras de espectrorradiômetro (.SSM) em refletância e médias, para qualquer cultura e delineamento.">
 <style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>Espectroprocessamento</title>
+<title>Spekta</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
@@ -123,7 +123,7 @@ table.examples td.m{font-family:var(--f-mono);font-size:12.5px;white-space:nowra
 
 <div class="wrap">
 <header class="top">
-  <h1>Espectroprocessamento</h1>
+  <h1>Spekta</h1>
   <p class="lede">Transforma as leituras do espectrorradiômetro (arquivos <span class="mono">.SSM</span>) em refletância, dividindo cada leitura pela placa branca de referência, recorta a faixa espectral e tira as médias que o seu experimento pedir. Serve para qualquer cultura e qualquer delineamento: você descreve como os arquivos foram nomeados e o aplicativo organiza o resto. O cálculo é o mesmo do Spectroscopy Pro-Tools.</p>
   <div class="band" aria-hidden="true"><span class="tag">faixa processada</span><span class="l" id="bandLo">450 nm</span><span class="r" id="bandHi">1100 nm</span></div>
 </header>
@@ -883,10 +883,10 @@ $("#save").addEventListener("click",async()=>{
     root.file("Relatório de conferência.csv","﻿"+s);
   }
   const blob=await z.generateAsync({type:"blob",compression:"DEFLATE"});
-  await saveFile("Resultados Espectroprocessamento.zip",blob);
+  await saveFile("Resultados Spekta.zip",blob);
   $("#save").disabled=false; $("#save").textContent="Baixar resultados (.zip)";
 });
-$("#saveApp").addEventListener("click",()=>saveFile("Espectroprocessamento.html",new Blob(["<!doctype html>\n"+document.documentElement.outerHTML],{type:"text/html"})));
+$("#saveApp").addEventListener("click",()=>saveFile("Spekta.html",new Blob(["<!doctype html>\n"+document.documentElement.outerHTML],{type:"text/html"})));
 })();
 </script>
 
