@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Espectroprocessamento: converte leituras de espectrorradiômetro (.SSM) em refletância e médias, para qualquer cultura e delineamento.">
+<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Espectroprocessamento</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: coluna única de largura de leitura, abas no topo; faixa espectral 450–1100 nm como assinatura */
+:root{
+  --bg:#f4f6f3; --surface:#ffffff; --ink:#18211c; --muted:#5b6a61; --line:#dce3dd; --soft:#eef2ee;
+  --accent:#1f6b5c; --accent-ink:#ffffff; --accent-soft:#e1efe9;
+  --ok:#2e7d4f; --ok-soft:#e3f2e8; --warn:#9a6400; --warn-soft:#fbf0d9; --bad:#b3362c; --bad-soft:#f8e4e1;
+  --plot-grid:#e4e9e5; --plot-thin:#9fb5aa;
+  --f-display:"Space Grotesk",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111613; --surface:#171e1a; --ink:#e6ece8; --muted:#9aaba1; --line:#2a352f; --soft:#1d2621; --accent:#5cc2a8; --accent-ink:#0c1512; --accent-soft:#183129;
+  --ok:#6cc690; --ok-soft:#173022; --warn:#e6b44f; --warn-soft:#30260f; --bad:#ee8075; --bad-soft:#371a17;
+  --plot-grid:#25302a; --plot-thin:#4f6a5d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111613; --surface:#171e1a; --ink:#e6ece8; --muted:#9aaba1; --line:#2a352f; --soft:#1d2621;
+  --accent:#5cc2a8; --accent-ink:#0c1512; --accent-soft:#183129;
+  --ok:#6cc690; --ok-soft:#173022; --warn:#e6b44f; --warn-soft:#30260f; --bad:#ee8075; --bad-soft:#371a17;
+  --plot-grid:#25302a; --plot-thin:#4f6a5d; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(26px,4vw,36px);font-weight:700}
+h2{font-size:21px;font-weight:600}
+h3{font-size:16px;font-weight:600}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-size:.92em}
+.muted{color:var(--muted)}
+header.top{display:grid;gap:14px;margin-bottom:22px}
+.lede{max-width:66ch;color:var(--muted)}
+.band{position:relative;height:38px;border-radius:6px;overflow:hidden;
+  background:linear-gradient(90deg,#3b3df0 0%,#1f8bff 6%,#13c4c0 12%,#3fcf4a 18%,#d8e11f 24%,#ffb21a 30%,#ff5a1f 36%,#c3121e 40%,#6e0d1b 44%,#40323f 48%,#3c3a44 100%)}
+.band span{position:absolute;bottom:4px;font-family:var(--f-mono);font-size:11px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.band .l{left:8px}.band .m{left:38%}.band .r{right:8px}
+.band .tag{top:5px;bottom:auto;right:8px;font-family:var(--f-body);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:10.5px}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:24px;overflow-x:auto}
+nav.tabs button{appearance:none;border:0;background:none;color:var(--muted);font:500 15px var(--f-body);padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs button:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,label.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+section.panel{display:grid;gap:22px}
+.step{display:grid;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+.step-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.num{font-family:var(--f-mono);font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:1px 8px}
+label.drop{display:grid;place-items:center;gap:6px;text-align:center;border:1.5px dashed var(--line);border-radius:8px;padding:28px 16px;background:var(--soft);cursor:pointer}
+label.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:500 14px var(--f-body);padding:8px 14px;border-radius:7px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.small{padding:4px 10px;font-size:13px}
+input[type=number],input[type=text],select{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+input.cell{width:4.2em;font-family:var(--f-mono);font-size:13px;padding:3px 6px}
+input.cell.g{width:6.5em}
+select.cell{max-width:15em;font-family:var(--f-mono);font-size:12.5px;padding:3px 4px}
+.stats{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:13px;background:var(--soft);color:var(--ink);white-space:nowrap}
+.chip b{font-family:var(--f-mono);font-weight:500}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-height:520px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{position:sticky;top:0;background:var(--soft);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);z-index:1}
+td.file{font-family:var(--f-mono);font-size:12.5px;white-space:pre}
+td.note{color:var(--muted);font-size:12.5px;min-width:14em}
+tr.off td{opacity:.45}
+.callout{border-left:3px solid var(--warn);background:var(--warn-soft);padding:10px 14px;border-radius:0 6px 6px 0;font-size:14px}
+.callout.ok{border-color:var(--ok);background:var(--ok-soft)}
+.callout.info{border-color:var(--accent);background:var(--accent-soft)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.grid2>*{min-width:0}
+canvas{width:100%;height:320px;display:block;background:var(--surface)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.prose{display:grid;gap:14px;max-width:72ch}
+.prose ol,.prose ul{margin:0;padding-left:1.3em;display:grid;gap:8px}
+.prose code,.prose kbd{font-family:var(--f-mono);font-size:.9em;background:var(--soft);padding:1px 5px;border-radius:4px}
+.tut{display:grid;gap:16px;counter-reset:s}
+.tut>li{list-style:none;display:grid;grid-template-columns:2.2em 1fr;gap:12px;align-items:start}
+.tut>li::before{counter-increment:s;content:counter(s);font-family:var(--f-mono);display:grid;place-items:center;width:2em;height:2em;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:500}
+.tut>li>div{display:grid;gap:6px;min-width:0}
+.figure{font-family:var(--f-mono);font-size:12.5px;background:var(--soft);border-radius:8px;padding:12px 14px;white-space:pre;overflow-x:auto;line-height:1.6}
+.big{font-family:var(--f-display);font-size:34px;font-weight:700;line-height:1}
+.kpi{display:grid;gap:6px;border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--surface)}
+.kpi .big{color:var(--ok)}
+footer{margin-top:40px;color:var(--muted);font-size:13px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:14px;z-index:20}
+@media (prefers-reduced-motion:no-preference){.btn,nav.tabs button{transition:border-color .15s,color .15s}}
+
+.model{display:grid;gap:12px}
+.model input#tpl{font-family:var(--f-mono);font-size:15px;width:100%;max-width:34em;padding:7px 10px}
+.preview{display:grid;gap:6px}
+.pv{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+.pv .fn{font-family:var(--f-mono);font-size:12.5px;min-width:13em;color:var(--muted)}
+.pv .kv{font-family:var(--f-mono);font-size:12.5px;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:1px 7px}
+.pv .kv.miss{background:var(--warn-soft);color:var(--warn)}
+.pv .kv.ref{background:var(--soft);color:var(--muted)}
+.fieldset{display:grid;gap:10px;border:0;padding:0;margin:0}
+.fieldset label.opt{display:flex;gap:8px;align-items:flex-start}
+.fieldset label.opt input{margin-top:4px}
+.hint{font-size:13px;color:var(--muted)}
+table.examples td{font-size:13px}
+table.examples td.m{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>Espectroprocessamento</h1>
+  <p class="lede">Transforma as leituras do espectrorradiômetro (arquivos <span class="mono">.SSM</span>) em refletância, dividindo cada leitura pela placa branca de referência, recorta a faixa espectral e tira as médias que o seu experimento pedir. Serve para qualquer cultura e qualquer delineamento: você descreve como os arquivos foram nomeados e o aplicativo organiza o resto. O cálculo é o mesmo do Spectroscopy Pro-Tools.</p>
+  <div class="band" aria-hidden="true"><span class="tag">faixa processada</span><span class="l" id="bandLo">450 nm</span><span class="r" id="bandHi">1100 nm</span></div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" id="tab-processar" aria-selected="true" data-tab="processar">Processar</button>
+  <button role="tab" id="tab-tutorial" aria-selected="false" data-tab="tutorial">Como usar</button>
+  <button role="tab" id="tab-validacao" aria-selected="false" data-tab="validacao">Validação</button>
+</nav>
+
+<!-- ================= PROCESSAR ================= -->
+<section class="panel" id="panel-processar">
+  <div class="step">
+    <div class="step-h"><span class="num">1</span><h2>Carregar os arquivos</h2></div>
+    <label class="drop" id="drop" for="pickDir">
+      <strong>Arraste a pasta com as leituras para cá</strong>
+      <span class="muted">ou clique para escolher a pasta. Arquivos com outra extensão são ignorados.</span>
+      <input type="file" id="pickDir" webkitdirectory directory multiple hidden>
+    </label>
+    <div class="row">
+      <label class="btn small" for="pickFiles">Escolher arquivos soltos</label>
+      <input type="file" id="pickFiles" multiple hidden>
+      <label class="hint">Extensão das leituras
+        <select id="ext"><option value="ssm">.SSM (contagens)</option><option value="trm">.TRM</option><option value="ref">.REF</option><option value="txt">.TXT</option></select></label>
+      <button class="btn small" id="loadDemo" type="button">Carregar exemplo de teste</button>
+    </div>
+    <p class="muted" id="loadInfo">Nenhum arquivo carregado. Nada sai do seu computador: tudo é calculado no navegador.</p>
+  </div>
+
+  <div class="step model">
+    <div class="step-h"><span class="num">2</span><h2>Como os arquivos foram nomeados</h2></div>
+    <label>Modelo pronto
+      <select id="preset"></select></label>
+    <label for="tpl">Modelo do nome <span class="hint">(escreva um nome de arquivo trocando cada parte que muda por <span class="mono">{nome-da-parte}</span>)</span></label>
+    <input type="text" id="tpl" spellcheck="false" autocomplete="off">
+    <div class="preview" id="preview"><span class="hint">Carregue arquivos para ver como os nomes estão sendo lidos.</span></div>
+    <div class="row">
+      <label>Fazer a média sobre <select id="avgOver"></select></label>
+      <label>Separar em pastas por <select id="folderBy"></select></label>
+    </div>
+    <div class="row">
+      <label>Pasta das leituras <input type="text" id="dirOne" style="width:12em"></label>
+      <label>Pasta das médias <input type="text" id="dirAvg" style="width:12em"></label>
+    </div>
+    <p class="hint" id="avgExplain"></p>
+  </div>
+
+  <div class="step">
+    <div class="step-h"><span class="num">3</span><h2>Placa de referência (branco)</h2></div>
+    <fieldset class="fieldset">
+      <label class="opt"><input type="radio" name="refMode" value="name" checked> <span><strong>Cada leitura tem a sua placa, com o mesmo nome e um marcador</strong><br><span class="hint">Ex.: <span class="mono">P1 1 B1.SSM</span> e a placa <span class="mono">P1 1 B1-.SSM</span>. Se a placa não tiver uma das partes do nome, ela vale para todas as leituras que combinam com o resto.</span></span></label>
+      <label class="opt"><input type="radio" name="refMode" value="time"> <span><strong>A placa lida logo antes de cada leitura</strong><br><span class="hint">Usa o horário em que os arquivos foram salvos. Bom para quem lê o branco de tempos em tempos (ex.: <span class="mono">branco 1</span>, <span class="mono">branco 2</span>).</span></span></label>
+      <label class="opt"><input type="radio" name="refMode" value="single"> <span><strong>Uma placa só para todas as leituras</strong></span></label>
+      <label class="opt"><input type="radio" name="refMode" value="none"> <span><strong>Os arquivos já estão em refletância</strong> <span class="hint">(não dividir, só recortar e tirar as médias)</span></span></label>
+    </fieldset>
+    <div class="row" id="markerRow">
+      <label>As placas têm no nome <input type="text" id="markers" value="-, (-)" style="width:12em" spellcheck="false"></label>
+      <span class="hint">no fim ou no começo do nome; separe as opções por vírgula (ex.: <span class="mono">-, branco, REF</span>)</span>
+    </div>
+    <div class="row" id="singleRow" hidden><label>Placa usada <select id="singleRef"></select></label></div>
+  </div>
+
+  <div class="step">
+    <div class="step-h"><span class="num">4</span><h2>Faixa e arquivos de saída</h2></div>
+    <div class="row">
+      <label>De <input type="number" id="lo" value="450" min="0" step="1" style="width:6em"> nm</label>
+      <label>até <input type="number" id="hi" value="1100" min="0" step="1" style="width:6em"> nm</label>
+      <label><input type="checkbox" id="fullRange"> usar o espectro inteiro</label>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="outOne" checked> CSV de cada leitura</label>
+      <label><input type="checkbox" id="outAvg" checked> CSV de cada média</label>
+      <label><input type="checkbox" id="outTable" checked> Tabela única</label>
+      <label><input type="checkbox" id="outReport" checked> Relatório de conferência</label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-h"><span class="num">5</span><h2>Conferir as leituras</h2></div>
+    <div class="stats" id="stats"><span class="chip">Carregue os arquivos para conferir.</span></div>
+    <div id="extraLists" class="grid2"></div>
+    <div class="row">
+      <label><input type="checkbox" id="onlyIssues"> Mostrar só as linhas com aviso</label>
+      <span class="hint">Corrija qualquer parte do nome direto na tabela e escolha a placa certa quando a automática não servir.</span>
+    </div>
+    <div class="tablebox"><table id="pairTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="step">
+    <div class="step-h"><span class="num">6</span><h2>Processar e baixar</h2></div>
+    <div class="row">
+      <button class="btn primary" id="run" type="button" disabled>Processar</button>
+      <button class="btn" id="save" type="button" disabled>Baixar resultados (.zip)</button>
+      <span class="muted" id="runInfo"></span>
+    </div>
+    <div id="results" hidden>
+      <div class="stats" id="resStats"></div>
+      <div class="row" style="margin-top:14px">
+        <label><span id="plotLabel">Média</span> <select id="plotSel"></select></label>
+        <div class="legend"><span><i style="background:var(--plot-thin)"></i>cada leitura</span><span><i style="background:var(--accent)"></i>média</span></div>
+      </div>
+      <canvas id="chart" width="1000" height="320" aria-label="Gráfico de refletância"></canvas>
+      <div class="figure" id="zipTree"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TUTORIAL ================= -->
+<section class="panel" id="panel-tutorial" hidden>
+  <div class="prose">
+    <h2>Passo a passo</h2>
+    <p>O aplicativo serve para qualquer cultura e qualquer delineamento (DBC, DIC, fatorial, parcelas subdivididas, pontos de amostragem no campo). A única coisa que ele precisa saber é como os arquivos foram nomeados, para entender o que é cada leitura.</p>
+  </div>
+  <ol class="tut prose">
+    <li><div><h3>Carregue a pasta</h3>
+      <p>Arraste a pasta inteira que saiu do espectrorradiômetro para a área tracejada, ou clique nela para escolher. Deixe em <strong>.SSM</strong> se o seu equipamento salva contagens (o padrão do SpectraWiz). Os outros arquivos da pasta (.ABS, .pdf…) são ignorados.</p>
+      <p class="muted">Os arquivos são lidos no seu navegador e não são enviados para lugar nenhum.</p></div></li>
+    <li><div><h3>Descreva o nome dos arquivos</h3>
+      <p>Escolha um modelo pronto ou escreva o seu. Pegue um nome de arquivo qualquer e troque cada parte que muda por um nome entre chaves:</p>
+      <div class="figure">Arquivo:  P2 15 B3.SSM
+Modelo:   P{planta} {tratamento} B{bloco}</div>
+      <p>Logo abaixo do modelo aparecem alguns arquivos já lidos. Confira se cada parte caiu no lugar certo. Os nomes das partes são livres: <span class="mono">{cultivar}</span>, <span class="mono">{dose}</span>, <span class="mono">{ponto}</span>, <span class="mono">{dia}</span>…</p>
+      <div class="tablebox" style="max-height:none"><table class="examples"><thead><tr><th>Experimento</th><th>Exemplo de arquivo</th><th>Modelo</th><th>Média sobre</th><th>Pastas por</th></tr></thead><tbody>
+        <tr><td>DBC, 3 plantas por parcela</td><td class="m">P1 12 B2</td><td class="m">P{planta} {tratamento} B{bloco}</td><td>planta</td><td>bloco</td></tr>
+        <tr><td>DIC, 4 repetições, 3 leituras por vaso</td><td class="m">T5 R2 L3</td><td class="m">{tratamento} R{repeticao} L{leitura}</td><td>leitura</td><td>—</td></tr>
+        <tr><td>Fatorial (dose × cultivar) em blocos</td><td class="m">D2 BRS B3 P1</td><td class="m">D{dose} {cultivar} B{bloco} P{planta}</td><td>planta</td><td>bloco</td></tr>
+        <tr><td>Avaliação ao longo do tempo</td><td class="m">Dia14_T3_R1</td><td class="m">Dia{dia} T{tratamento} R{repeticao}</td><td>—</td><td>dia</td></tr>
+        <tr><td>Pontos de amostragem no campo</td><td class="m">Talhao4 P27 L2</td><td class="m">Talhao{talhao} P{ponto} L{leitura}</td><td>leitura</td><td>talhao</td></tr>
+        <tr><td>Só converter, sem média</td><td class="m">qualquer nome</td><td class="m">{amostra}</td><td>não fazer média</td><td>—</td></tr>
+      </tbody></table></div></div></li>
+    <li><div><h3>Diga sobre o que tirar a média</h3>
+      <p>Escolha a parte do nome que representa as subamostras: as plantas da parcela, as leituras do mesmo vaso, as folhas da mesma planta. A média junta todos os arquivos que têm o resto do nome igual. Se não quiser média, escolha <em>não fazer média</em>.</p>
+      <p>Em <em>Separar em pastas por</em> você pode organizar os resultados em subpastas (por bloco, por dia, por talhão…).</p></div></li>
+    <li><div><h3>Indique como encontrar a placa branca</h3>
+      <ul>
+        <li><strong>Mesmo nome e um marcador:</strong> <span class="mono">T5 R2 L3-.SSM</span> é a placa de <span class="mono">T5 R2 L3.SSM</span>. Se a placa for por parcela (ex.: <span class="mono">T5 R2-</span>), ela vale para todas as leituras dessa parcela.</li>
+        <li><strong>Placa lida logo antes:</strong> para quem lê o branco de tempos em tempos. O aplicativo usa o horário em que os arquivos foram salvos.</li>
+        <li><strong>Uma placa só:</strong> uma única leitura de branco para tudo.</li>
+        <li><strong>Já em refletância:</strong> não divide nada, só recorta e tira as médias (para arquivos .TRM, por exemplo).</li>
+      </ul></div></li>
+    <li><div><h3>Confira e corrija</h3>
+      <p>A tabela mostra cada leitura, as partes do nome e a placa que será usada.</p>
+      <ul>
+        <li><span class="chip ok">ok</span> nome lido sem problema e placa encontrada.</li>
+        <li><span class="chip warn">conferir</span> o aplicativo deduziu algo (uma parte que faltava no nome, uma placa sem alguma parte). Confira se está certo.</li>
+        <li><span class="chip bad">sem placa</span> ou <span class="chip bad">nome fora do modelo</span>: corrija as partes do nome direto na tabela ou escolha a placa na lista. Também pode desmarcar <em>Usar</em>.</li>
+      </ul>
+      <p>Use <strong>Mostrar só as linhas com aviso</strong> para ver só o que precisa de atenção.</p></div></li>
+    <li><div><h3>Processe e baixe</h3>
+      <p>Clique em <strong>Processar</strong>. O gráfico mostra cada média com as leituras que entraram nela, para você achar curvas estranhas. Depois clique em <strong>Baixar resultados</strong>. O .zip traz:</p>
+      <div class="figure">Resultados/
+├── (pasta das leituras)/…   um CSV por leitura
+├── (pasta das médias)/…     um CSV por média
+├── Tabela única.csv         uma linha por média, pronta para R/Excel
+└── Relatório de conferência.csv   placa usada e avisos de cada arquivo</div>
+      <p>Os CSVs saem no formato do Spectroscopy Pro-Tools: separador <code>;</code>, vírgula decimal e a linha de título <code>;Part of: … divided by: …;</code>.</p></div></li>
+  </ol>
+  <div class="prose">
+    <h2>Dúvidas comuns</h2>
+    <p><strong>Uma média ficou com menos leituras.</strong> Quando falta o arquivo de uma leitura, a média é feita com as que existem. O aviso aparece depois de processar, e a tabela única tem uma coluna com o número de leituras de cada média.</p>
+    <p><strong>Um arquivo foi salvo com o nome errado.</strong> Ele aparece como <em>nome fora do modelo</em>. Digite as partes certas na tabela, sem precisar renomear o arquivo.</p>
+    <p><strong>Usei a placa de outra leitura no campo.</strong> Escolha a placa na coluna <em>Placa usada</em>. O relatório registra a troca.</p>
+    <p><strong>Funciona com qualquer espectrorradiômetro?</strong> Funciona com arquivos de texto de duas colunas (comprimento de onda e valor), como o .SSM do SpectraWiz (StellarNet). Formatos binários de outros fabricantes não são lidos.</p>
+    <p><strong>Posso usar sem internet?</strong> Na aba Validação há um botão para salvar uma cópia do aplicativo em .html. Abra a cópia no navegador.</p>
+  </div>
+</section>
+
+<!-- ================= VALIDAÇÃO ================= -->
+<section class="panel" id="panel-validacao" hidden>
+  <div class="prose">
+    <h2>O aplicativo dá o mesmo resultado do Pro-Tools?</h2>
+    <p>O cálculo foi validado contra o Spectroscopy Pro-Tools (v1.2.16.1) num experimento real: população F2 de alface biofortificada, em DBC com 35 genótipos e 4 testemunhas, 3 blocos e 3 plantas por parcela, faixa de 450–1100 nm. O modelo de nome e o delineamento só mudam como os arquivos são agrupados. A divisão pela placa, o recorte e a média são sempre o mesmo cálculo validado aqui.</p>
+  </div>
+  <div class="grid2">
+    <div class="kpi"><span class="big">348 / 348</span><span>espectros por leitura idênticos ao Pro-Tools, caractere por caractere, a partir dos .SSM brutos</span></div>
+    <div class="kpi"><span class="big">117 / 117</span><span>médias idênticas, do .SSM bruto até o CSV final</span></div>
+    <div class="kpi"><span class="big">0</span><span>diferença numérica máxima entre os dois métodos, em 554 mil pontos de refletância</span></div>
+  </div>
+  <div class="prose">
+    <h3>Como foi o teste</h3>
+    <ul>
+      <li><strong>Dados:</strong> todas as 348 plantas e 117 parcelas do experimento, a partir dos 697 arquivos .SSM originais (plantas e placas), incluindo 28 arquivos com nome irregular.</li>
+      <li><strong>Referência:</strong> os CSVs gerados à mão no Pro-Tools, um por planta e um por parcela.</li>
+      <li><strong>Critério:</strong> o CSV do aplicativo comparado caractere por caractere com o do Pro-Tools, incluindo cabeçalho, casas decimais e quebras de linha.</li>
+      <li><strong>Teste no próprio aplicativo:</strong> a pasta inteira foi carregada no navegador com o modelo <span class="mono">P{planta} {tratamento} B{bloco}</span> e o .zip baixado foi comparado com o Pro-Tools.</li>
+    </ul>
+    <h3>O que o cálculo faz</h3>
+    <ol>
+      <li>Lê o espectro da leitura e o da placa (no SpectraWiz, 2048 pontos, ~337 a ~1173 nm).</li>
+      <li>Reamostra cada um numa grade uniforme com o mesmo número de pontos, entre o primeiro e o último comprimento de onda, por interpolação linear (passo ≈ 0,408 nm).</li>
+      <li>Divide leitura ÷ placa e guarda só os pontos da faixa escolhida (450–1100 nm deram 1593 pontos).</li>
+      <li>Grava o comprimento de onda com 3 casas e a refletância com 8 algarismos significativos.</li>
+      <li>Na média, reamostra cada leitura (já arredondada como no CSV) na grade uniforme e tira a média aritmética.</li>
+    </ol>
+    <h3>O que o teste encontrou nos dados</h3>
+    <p>Os cabeçalhos dos CSVs revelam qual placa foi usada. Em duas plantas a divisão foi feita com a placa de outra planta, e o aplicativo marca as duas como <em>sem placa</em> para a pessoa decidir:</p>
+    <div class="tablebox" style="max-height:none"><table><thead><tr><th>Planta</th><th>Arquivo da planta</th><th>Placa usada no Pro-Tools</th></tr></thead><tbody>
+      <tr><td>P3 14 B1</td><td class="file">P3 14</td><td class="file">P2 14 -</td></tr>
+      <tr><td>P3 29 B1</td><td class="file">P3 29 B1</td><td class="file">P2 29 B1-</td></tr>
+    </tbody></table></div>
+    <p>Três parcelas tiveram média com 2 plantas, porque falta o arquivo da planta: 8 B1, 16 B2 e 34 B3.</p>
+    <h3>Limites</h3>
+    <ul>
+      <li>Validado com arquivos .SSM do SpectraWiz (StellarNet). Lê qualquer arquivo de texto com duas colunas, mas outros formatos não foram comparados com o Pro-Tools.</li>
+      <li>Quando um valor cai exatamente no meio entre dois arredondamentos possíveis, o desempate pode diferir do Pro-Tools na última casa. No teste isso não aconteceu nenhuma vez.</li>
+      <li>Se as leituras de uma média tiverem grades de comprimento de onda diferentes (equipamentos diferentes), elas são interpoladas na grade da primeira leitura.</li>
+    </ul>
+    <div class="row"><button class="btn" id="saveApp" type="button">Salvar uma cópia do aplicativo (.html)</button></div>
+  </div>
+</section>
+
+<footer>O cálculo roda no seu navegador; nenhum arquivo é enviado.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+/* ===== Núcleo de cálculo (compatível com Spectroscopy Pro-Tools) ===== */
+const Core = (() => {
+  // Lê arquivo .SSM do SpectraWiz (StellarNet): linhas "comprimento  valor"
+  function parseSSM(text) {
+    const lines = text.replace(/\r\n?/g, "\n").split("\n");
+    const wl = [], val = [];
+    for (const l of lines) {
+      const s = l.trim().split(/\s+/);
+      if (s.length !== 2) continue;
+      const a = Number(s[0]), b = Number(s[1]);
+      if (!Number.isFinite(a) || !Number.isFinite(b) || s[0] === "" ) continue;
+      wl.push(a); val.push(b);
+    }
+    return { wl: Float64Array.from(wl), val: Float64Array.from(val) };
+  }
+
+  // Grade uniforme entre o primeiro e o último comprimento de onda (mesmo nº de pontos)
+  function grid(a, b, n) {
+    const g = new Float64Array(n);
+    for (let i = 0; i < n; i++) { const t = i / (n - 1); g[i] = a * (1 - t) + b * t; }
+    return g;
+  }
+
+  // Interpolação linear (mesma fórmula do numpy.interp)
+  function interp(xq, x, y) {
+    const n = x.length, out = new Float64Array(xq.length);
+    let j = 0;
+    for (let i = 0; i < xq.length; i++) {
+      const v = xq[i];
+      if (v <= x[0]) { out[i] = y[0]; continue; }
+      if (v >= x[n - 1]) { out[i] = y[n - 1]; continue; }
+      if (v < x[j]) j = 0;
+      while (j < n - 2 && x[j + 1] <= v) j++;
+      if (v === x[j]) { out[i] = y[j]; continue; }
+      const slope = (y[j + 1] - y[j]) / (x[j + 1] - x[j]);
+      out[i] = slope * (v - x[j]) + y[j];
+    }
+    return out;
+  }
+
+  // Planta ÷ placa, recortado na faixa [lo, hi]
+  function ratio(plant, plate, lo, hi) {
+    const x = plant.wl, n = x.length;
+    const g = grid(x[0], x[n - 1], n);
+    const yp = interp(g, x, plant.val);
+    const yr = interp(g, plate.wl, plate.val);
+    const wl = [], val = [];
+    for (let i = 0; i < n; i++) {
+      if (g[i] >= lo && g[i] <= hi) { wl.push(g[i]); val.push(yp[i] / yr[i]); }
+    }
+    return { wl: Float64Array.from(wl), val: Float64Array.from(val) };
+  }
+
+  // Número com 8 algarismos significativos (arredonda .5 para cima), sem zeros à direita
+  function g8(v) {
+    if (!Number.isFinite(v)) return String(v);
+    if (v === 0) return "0";
+    const neg = v < 0;
+    let s = Math.abs(v).toPrecision(15);
+    let mant = s, exp = 0;
+    const ei = s.indexOf("e");
+    if (ei >= 0) { mant = s.slice(0, ei); exp = parseInt(s.slice(ei + 1), 10); }
+    const dot = mant.indexOf(".");
+    let intPart = dot >= 0 ? mant.slice(0, dot) : mant;
+    let frac = dot >= 0 ? mant.slice(dot + 1) : "";
+    let digits = intPart + frac;
+    let pointPos = intPart.length + exp; // posição do ponto decimal em "digits"
+    const lead = digits.match(/^0*/)[0].length;
+    digits = digits.slice(lead); pointPos -= lead;
+    let keep = digits.slice(0, 8).split("").map(Number);
+    while (keep.length < 8) keep.push(0);
+    if (Number(digits[8] || 0) >= 5) {
+      let k = 7;
+      while (k >= 0) { keep[k]++; if (keep[k] < 10) break; keep[k] = 0; k--; }
+      if (k < 0) { keep.unshift(1); keep.pop(); pointPos++; }
+    }
+    let d = keep.join("");
+    let out;
+    if (pointPos <= 0) out = "0." + "0".repeat(-pointPos) + d;
+    else if (pointPos >= d.length) out = d + "0".repeat(pointPos - d.length);
+    else out = d.slice(0, pointPos) + "." + d.slice(pointPos);
+    if (out.indexOf(".") >= 0) out = out.replace(/0+$/, "").replace(/\.$/, "");
+    return (neg ? "-" : "") + out;
+  }
+
+  // CSV no mesmo formato do Pro-Tools (separador ";", vírgula decimal, CRLF)
+  function toCSV(title, wl, val) {
+    let s = ";" + title + ";\r\nWavelength [nm];Intensity;\r\n";
+    const parts = new Array(wl.length);
+    for (let i = 0; i < wl.length; i++) {
+      parts[i] = (wl[i].toFixed(3) + ";" + g8(val[i]) + ";").replace(/\./g, ",");
+    }
+    return s + parts.join("\r\n") + "\r\n";
+  }
+
+  // Valores exatamente como ficam gravados no CSV (a média do Pro-Tools parte deles)
+  function asWritten(spec) {
+    const wl = new Float64Array(spec.wl.length), val = new Float64Array(spec.wl.length);
+    for (let i = 0; i < wl.length; i++) { wl[i] = Number(spec.wl[i].toFixed(3)); val[i] = Number(g8(spec.val[i])); }
+    return { wl, val };
+  }
+
+  // Média das plantas de uma parcela
+  function average(specs) {
+    const w = specs.map(asWritten);
+    const ref = w[0], n = ref.wl.length;
+    const g = grid(ref.wl[0], ref.wl[n - 1], n);
+    const sum = new Float64Array(n);
+    for (const s of w) {
+      const gi = (s.wl.length === n && s.wl[0] === ref.wl[0] && s.wl[n - 1] === ref.wl[n - 1])
+        ? grid(s.wl[0], s.wl[s.wl.length - 1], s.wl.length) : g;
+      const y = interp(gi, s.wl, s.val);
+      for (let i = 0; i < n; i++) sum[i] += y[i];
+    }
+    const val = new Float64Array(n);
+    for (let i = 0; i < n; i++) val[i] = sum[i] / w.length;
+    return { wl: g, val };
+  }
+
+  /* ---------- Modelo de nome: "P{planta} {tratamento} B{bloco}" ---------- */
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function fieldsOf(template) { return [...template.matchAll(/\{([^}]+)\}/g)].map(m => m[1].trim().toLowerCase()); }
+
+  // Monta o regex: espaços do modelo aceitam 0+ espaços, exceto entre dois campos (1+)
+  function buildRegex(template, skip, nospace) {
+    const parts = template.split(/(\{[^}]+\})/);
+    const segs = []; // {lit, field}
+    let lit = "";
+    for (const p of parts) {
+      if (/^\{[^}]+\}$/.test(p)) { segs.push({ lit, field: p.slice(1, -1).trim().toLowerCase() }); lit = ""; }
+      else lit += p;
+    }
+    const tail = lit;
+    let re = "^\\s*", names = [];
+    segs.forEach((s, i) => {
+      if (i === skip) return;
+      const prevIsField = names.length > 0;
+      const l = s.lit;
+      if (l.trim() === "") re += prevIsField ? "\\s+" : "\\s*";
+      else re += "\\s*" + esc(l.trim()).replace(/\s+/g, "\\s*") + "\\s*";
+      re += nospace ? "(\\S+?)" : "(.+?)"; names.push(s.field);
+    });
+    re += (tail.trim() === "" ? "" : "\\s*" + esc(tail.trim()).replace(/\s+/g, "\\s*")) + "\\s*$";
+    return { re: new RegExp(re, "i"), names, nSegs: segs.length };
+  }
+
+  function normVal(v) {
+    let s = String(v).toUpperCase().replace(/\s+/g, "");
+    const notes = [];
+    if (/[A-Z]O\d+$/.test(s)) { s = s.replace(/([A-Z])O(\d+)$/, "$10$2"); notes.push("letra O no lugar de zero"); }
+    if (/^\d+$/.test(s)) s = String(parseInt(s, 10));
+    return { v: s, notes };
+  }
+
+  function makeParser(template, markers) {
+    const fields = fieldsOf(template);
+    const tries = [buildRegex(template, -1, true), buildRegex(template, -1, false)];
+    for (const ns of [true, false]) fields.forEach((_, k) => { if (k > 0) tries.push(Object.assign(buildRegex(template, k, ns), { skip: fields[k] })); });
+    const mk = (markers || []).map(m => m.trim().toUpperCase()).filter(Boolean).sort((a, b) => b.length - a.length);
+    // Todas as leituras possíveis de um nome, da mais provável para a menos
+    function candidates(filename) {
+      const base = filename.replace(/^.*[\\/]/, "").replace(/\.[^.]+$/, "");
+      const notes = [];
+      let s = base.toUpperCase().replace(/[_\[\]]/g, " ").replace(/\s+/g, " ").trim();
+      if (base !== base.trim() || /\s{2,}/.test(base) || /[\[\]]/.test(base)) notes.push("nome com espaço ou caractere sobrando");
+      let isRef = false;
+      for (const m of mk) {
+        if (s.endsWith(m)) { isRef = true; s = s.slice(0, -m.length).trim(); break; }
+        if (m !== "-" && s.startsWith(m)) { isRef = true; s = s.slice(m.length).trim(); break; }
+      }
+      const cands = [];
+      if (fields.length) for (const T of tries) {
+        const x = s.match(T.re); if (!x) continue;
+        const vals = {}, n2 = [];
+        T.names.forEach((f, i) => { const n = normVal(x[i + 1]); vals[f] = n.v; n2.push(...n.notes); });
+        if (T.skip) { vals[T.skip] = null; n2.push(`sem ${T.skip} no nome`); }
+        cands.push({ vals, missing: T.skip ? [T.skip] : [], notes: n2, strict: !T.skip });
+      }
+      return { base, isRef, notes, cands };
+    }
+    // Lê todos os nomes juntos: campos que quase sempre são números precisam ser números
+    function parseAll(filenames) {
+      const raw = filenames.map(candidates);
+      const numeric = {};
+      for (const f of fields) {
+        const pool = raw.filter(r => !r.isRef).length >= 3 ? raw.filter(r => !r.isRef) : raw;
+        const v = pool.map(r => r.cands.find(c => c.strict)).filter(Boolean).map(c => c.vals[f]);
+        numeric[f] = v.length >= 3 && v.filter(x => /^\d+$/.test(x)).length / v.length >= 0.95;
+      }
+      const fits = c => fields.every(f => c.vals[f] === null || !numeric[f] || /^\d+$/.test(c.vals[f]));
+      return raw.map(r => {
+        const c = r.cands.find(fits);
+        if (!fields.length) return { base: r.base, ok: true, isRef: r.isRef, vals: {}, missing: [], notes: r.notes };
+        if (!c) return { base: r.base, ok: false, isRef: r.isRef, vals: Object.fromEntries(fields.map(f => [f, null])), missing: fields.slice(), notes: [...r.notes, "nome fora do modelo"] };
+        return { base: r.base, ok: true, isRef: r.isRef, vals: c.vals, missing: c.missing, notes: [...r.notes, ...c.notes] };
+      });
+    }
+    return { fields, parseAll };
+  }
+
+  // Preenche o modelo com valores; remove um campo (e o texto antes dele) quando pedido
+  function render(template, vals, drop) {
+    const parts = template.split(/(\{[^}]+\})/);
+    let out = "";
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (/^\{[^}]+\}$/.test(p)) {
+        const f = p.slice(1, -1).trim().toLowerCase();
+        if (f === drop) { out = out.replace(/\S*$/, ""); continue; }
+        out += vals[f] ?? "?";
+      } else out += p;
+    }
+    return out.replace(/\s+/g, " ").trim();
+  }
+
+  return { parseSSM, grid, interp, ratio, g8, toCSV, asWritten, average, makeParser, render, fieldsOf, normVal };
+})();
+
+
+</script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const LATIN = new TextDecoder("iso-8859-1");
+const PRESETS = [
+  { id:"dbc", label:"DBC · várias plantas por parcela (P1 12 B2)", tpl:"P{planta} {tratamento} B{bloco}", avg:"planta", folder:"bloco", one:"Por planta", many:"Média da Parcela" },
+  { id:"dic", label:"DIC · várias leituras por repetição (T5 R2 L3)", tpl:"{tratamento} R{repeticao} L{leitura}", avg:"leitura", folder:"", one:"Por leitura", many:"Média por repetição" },
+  { id:"fat", label:"Fatorial em blocos (D2 BRS B3 P1)", tpl:"D{dose} {cultivar} B{bloco} P{planta}", avg:"planta", folder:"bloco", one:"Por planta", many:"Média da Parcela" },
+  { id:"tempo", label:"Avaliações no tempo (Dia14_T3_R1)", tpl:"Dia{dia} T{tratamento} R{repeticao}", avg:"", folder:"dia", one:"Por leitura", many:"Médias" },
+  { id:"campo", label:"Pontos no campo (Talhao4 P27 L2)", tpl:"Talhao{talhao} P{ponto} L{leitura}", avg:"leitura", folder:"talhao", one:"Por leitura", many:"Média por ponto" },
+  { id:"simples", label:"Só converter, sem média (qualquer nome)", tpl:"{amostra}", avg:"", folder:"", one:"Refletância", many:"Médias" },
+  { id:"custom", label:"Personalizado" }
+];
+const S = { files:[], recs:[], refs:[], unknown:[], fields:[], results:null };
+let toastT;
+function toast(msg){ let t=$(".toast"); if(!t){t=document.createElement("div");t.className="toast";t.setAttribute("role","status");document.body.appendChild(t);} t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3500); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+const cap = s => s ? s[0].toUpperCase()+s.slice(1) : s;
+const cmpV = (a,b) => { a=a??"", b=b??""; const na=/^\d+$/.test(a), nb=/^\d+$/.test(b); if(na&&nb) return a-b; if(na) return -1; if(nb) return 1; return String(a).localeCompare(b,"pt",{numeric:true}); };
+
+/* ---------- abas ---------- */
+const TABS=["processar","tutorial","validacao"];
+function showTab(n){ if(!TABS.includes(n)) n="processar"; TABS.forEach(t=>{ $("#panel-"+t).hidden=t!==n; $("#tab-"+t).setAttribute("aria-selected",t===n); }); }
+document.querySelectorAll("nav.tabs button").forEach(b=>b.addEventListener("click",()=>{ showTab(b.dataset.tab); try{history.replaceState(null,"","#"+b.dataset.tab);}catch(e){} }));
+window.addEventListener("hashchange",()=>showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
+
+/* ---------- configuração ---------- */
+$("#preset").innerHTML = PRESETS.map(p=>`<option value="${p.id}">${esc(p.label)}</option>`).join("");
+function cfg(){
+  return { tpl:$("#tpl").value, avg:$("#avgOver").value, folder:$("#folderBy").value,
+    one:$("#dirOne").value.trim()||"Leituras", many:$("#dirAvg").value.trim()||"Médias",
+    mode:document.querySelector("input[name=refMode]:checked").value,
+    markers:$("#markers").value.split(",").map(s=>s.trim()).filter(Boolean),
+    ext:$("#ext").value, lo:+$("#lo").value, hi:+$("#hi").value, full:$("#fullRange").checked };
+}
+function applyPreset(id){
+  const p=PRESETS.find(x=>x.id===id); if(!p||id==="custom") return;
+  $("#tpl").value=p.tpl; fillFieldSelects(p.avg,p.folder); $("#dirOne").value=p.one; $("#dirAvg").value=p.many;
+}
+function fillFieldSelects(avg,folder){
+  const f=Core.fieldsOf($("#tpl").value);
+  const cur={a:avg??$("#avgOver").value, f:folder??$("#folderBy").value};
+  $("#avgOver").innerHTML=`<option value="">não fazer média</option>`+f.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  $("#folderBy").innerHTML=`<option value="">não separar</option>`+f.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  $("#avgOver").value=f.includes(cur.a)?cur.a:""; $("#folderBy").value=f.includes(cur.f)?cur.f:"";
+  explain();
+}
+function explain(){
+  const c=cfg(), f=Core.fieldsOf(c.tpl); const rest=f.filter(x=>x!==c.avg);
+  const r0=(S.recs||[]).find(r=>r.ok&&f.every(x=>r.vals[x]!=null)); const ex=r0?r0.vals:Object.fromEntries(f.map(x=>[x,"…"]));
+  $("#avgExplain").textContent = !f.length ? "Coloque pelo menos uma parte entre chaves, por exemplo {amostra}." :
+    c.avg ? `Cada média junta as leituras com ${rest.length?rest.map(x=>"o mesmo "+x).join(", "):"qualquer nome"} e ${c.avg} diferente. Exemplo de nome da média: ${Core.render(c.tpl,ex,c.avg)||"média"}.` :
+    "Sem média: cada leitura vira um CSV de refletância.";
+}
+$("#preset").addEventListener("change",e=>{ applyPreset(e.target.value); reparse(); });
+$("#tpl").addEventListener("input",()=>{ $("#preset").value="custom"; fillFieldSelects(); clearTimeout(window.__tp); window.__tp=setTimeout(reparse,250); });
+["#avgOver","#folderBy"].forEach(s=>$(s).addEventListener("change",()=>{ explain(); invalidate(); render(); }));
+["#dirOne","#dirAvg"].forEach(s=>$(s).addEventListener("input",()=>{ if(S.results) drawTree(); }));
+document.querySelectorAll("input[name=refMode]").forEach(r=>r.addEventListener("change",()=>{ syncRefUI(); reparse(); }));
+$("#markers").addEventListener("change",reparse);
+$("#singleRef").addEventListener("change",()=>{ pairAll(); invalidate(); render(); });
+$("#ext").addEventListener("change",()=>{ if(S.allFiles) useFiles(S.allFiles, S.loadNote); });
+$("#fullRange").addEventListener("change",()=>{ $("#lo").disabled=$("#hi").disabled=$("#fullRange").checked; invalidate(); });
+["#lo","#hi"].forEach(s=>$(s).addEventListener("change",invalidate));
+function syncRefUI(){ const m=cfg().mode; $("#markerRow").hidden=m==="none"; $("#singleRow").hidden=m!=="single"; }
+applyPreset("dbc"); syncRefUI();
+
+/* ---------- leitura dos arquivos ---------- */
+async function readEntries(entry,out){
+  if(entry.isFile){ await new Promise(r=>entry.file(f=>{out.push(f);r();},()=>r())); return; }
+  if(entry.isDirectory){ const rd=entry.createReader(); let b; do{ b=await new Promise(r=>rd.readEntries(r,()=>r([]))); for(const e of b) await readEntries(e,out); }while(b.length); }
+}
+async function loadFiles(list){
+  const files=[];
+  for(const f of list){ if(!/\.(ssm|trm|ref|txt|irr|abs)$/i.test(f.name)) continue; files.push({name:f.name, time:f.lastModified||0, file:f, text:null}); }
+  if(!files.length){ $("#loadInfo").textContent="Nenhum arquivo de leitura encontrado nessa seleção."; return; }
+  useFiles(files, list.length);
+}
+async function useFiles(all, total){
+  S.allFiles=all; S.loadNote=total;
+  const ext=$("#ext").value;
+  const sel=all.filter(f=>f.name.toLowerCase().endsWith("."+ext));
+  for(const f of sel) if(f.text===null) f.text=LATIN.decode(await f.file.arrayBuffer());
+  S.files=sel;
+  const other=(typeof total==="number"?total:all.length)-sel.length;
+  $("#loadInfo").textContent = typeof total==="string" ? total : `${sel.length} arquivos .${ext.toUpperCase()} carregados${other>0?` (${other} outros ignorados)`:""}.`;
+  reparse();
+}
+const drop=$("#drop");
+["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,()=>drop.classList.remove("over")));
+drop.addEventListener("drop",async ev=>{ ev.preventDefault();
+  const items=[...(ev.dataTransfer.items||[])]; const entries=items.map(it=>it.webkitGetAsEntry?it.webkitGetAsEntry():null).filter(Boolean);
+  const out=[]; if(entries.length){ for(const en of entries) await readEntries(en,out); } else out.push(...ev.dataTransfer.files);
+  loadFiles(out); });
+$("#pickDir").addEventListener("change",e=>loadFiles([...e.target.files]));
+$("#pickFiles").addEventListener("change",e=>loadFiles([...e.target.files]));
+
+/* ---------- exemplo sintético ---------- */
+$("#loadDemo").addEventListener("click",()=>{
+  const N=2048,a=337.54,b=1172.843;
+  const lamp=w=>3000*Math.exp(-(((w-640)/260)**2))+1150;
+  const leaf=(w,k)=>{ const vis=0.05+0.07*Math.exp(-(((w-550)/35)**2)); const nir=0.48+0.05*k; const e=1/(1+Math.exp(-(w-715)/12)); return vis*(1-e)+nir*e; };
+  const ssm=f=>{ let s='#  "\r"SCOPE; Time (ms)=10; Avg=1; Sm=0; Tc=0; Xt=3\r'; for(let i=0;i<N;i++){ const w=a+(b-a)*i/(N-1)+0.0005*Math.sin(i/90); s+=`${w.toFixed(3)}  ${f(w).toFixed(1)}\r`; } return s; };
+  let seed=7; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647; const files=[]; let t=1.7e12;
+  const gens=["1","2","BIOF04"];
+  for(const g of gens) for(let bl=1;bl<=2;bl++) for(let p=1;p<=3;p++){
+    if(g==="2"&&bl===2&&p===3) continue;
+    const k=gens.indexOf(g)+rnd(), nz=()=>1+0.01*(rnd()-.5);
+    const nm=g==="BIOF04"&&p===3?`P${p} BIOF 04 B${bl}`:`P${p} ${g} B${bl}`;
+    files.push({name:nm+(g==="BIOF04"&&p===3?"(-)":"-")+".SSM",time:t+=10000,text:ssm(w=>lamp(w)*nz())});
+    files.push({name:nm+".SSM",time:t+=10000,text:ssm(w=>lamp(w)*leaf(w,k)*nz())});
+  }
+  files.push({name:"P2 1 B3.SSM",time:t+=10000,text:ssm(w=>lamp(w)*leaf(w,1))});
+  $("#preset").value="dbc"; applyPreset("dbc"); $("#ext").value="ssm";
+  document.querySelector("input[name=refMode][value=name]").checked=true; syncRefUI();
+  useFiles(files,"Exemplo de teste carregado (dados sintéticos, não são medições reais): DBC com 3 tratamentos × 2 blocos, uma planta faltando e uma leitura sem placa.");
+});
+
+/* ---------- leitura dos nomes e pareamento ---------- */
+function reparse(){
+  const c=cfg(); const P=Core.makeParser(c.tpl, c.mode==="none"?[]:c.markers);
+  S.fields=P.fields;
+  const parsed=P.parseAll(S.files.map(f=>f.name));
+  const recs=[], refs=[];
+  parsed.forEach((r,i)=>{ const o={file:S.files[i], base:r.base, ok:r.ok, vals:{...r.vals}, missing:[...r.missing], notes:[...r.notes], deduced:[], use:true};
+    (r.isRef?refs:recs).push(o); });
+  for(const list of [recs,refs]) deduce(list);
+  refs.forEach((r,i)=>r.id=i);
+  // duplicatas
+  const seen=new Map(); for(const r of recs){ if(!r.ok) continue; const k=JSON.stringify(S.fields.map(f=>r.vals[f])); if(seen.has(k)){ r.notes.push("nome repetido"); r.use=false; } else seen.set(k,r); }
+  recs.sort((x,y)=>{ for(const f of orderFields()){ const d=cmpV(x.vals[f],y.vals[f]); if(d) return d; } return x.base.localeCompare(y.base); });
+  S.recs=recs; S.refs=refs;
+  $("#singleRef").innerHTML=refs.length?refs.map(q=>`<option value="${q.id}">${esc(q.base)}</option>`).join(""):`<option value="">nenhuma placa encontrada</option>`;
+  pairAll(); invalidate(); renderPreview(parsed); explain(); render();
+}
+function orderFields(){ const c=cfg(); const f=S.fields.slice(); const out=[]; if(c.folder) out.push(c.folder); f.forEach(x=>{ if(x!==c.avg&&!out.includes(x)) out.push(x); }); if(c.avg) out.push(c.avg); return out; }
+function deduce(list){
+  const vals={}; S.fields.forEach(f=>vals[f]=[...new Set(list.map(r=>r.vals[f]).filter(v=>v!=null))]);
+  for(const r of list) if(r.ok) for(const f of r.missing){
+    const sib=list.filter(o=>o!==r&&o.ok&&S.fields.every(g=>g===f||o.vals[g]===r.vals[g])&&o.vals[f]!=null).map(o=>o.vals[f]);
+    const free=vals[f].filter(v=>!sib.includes(v));
+    if(free.length===1){ r.vals[f]=free[0]; r.deduced.push(f); r.notes=r.notes.filter(n=>n!==`sem ${f} no nome`); r.notes.push(`${f} ${free[0]} deduzido (era o único que faltava)`); }
+  }
+}
+function pairAll(){ for(const r of S.recs) autoRef(r); }
+function autoRef(r){
+  const c=cfg(); r.refNote=""; r.manual=false; r.ref=null;
+  if(c.mode==="none") return;
+  if(c.mode==="single"){ const v=$("#singleRef").value; r.ref=v===""?null:+v; return; }
+  if(c.mode==="time"){
+    const t=r.file.time; let best=null;
+    for(const q of S.refs) if(q.file.time<=t && (!best||q.file.time>best.file.time)) best=q;
+    r.ref=best?best.id:null; if(best) r.refNote="placa pelo horário"; return;
+  }
+  if(!r.ok) return;
+  const exact=S.refs.find(q=>q.ok&&S.fields.every(f=>q.vals[f]===r.vals[f]));
+  if(exact){ r.ref=exact.id; if(exact.deduced.length) r.refNote=`placa sem ${exact.deduced.join(", ")} no nome (deduzido)`; return; }
+  const wild=S.refs.filter(q=>q.ok&&S.fields.every(f=>q.vals[f]==null||q.vals[f]===r.vals[f]));
+  if(wild.length){ const nulls=q=>S.fields.filter(f=>q.vals[f]==null).length; wild.sort((x,y)=>nulls(x)-nulls(y));
+    if(wild.length===1||nulls(wild[0])<nulls(wild[1])){ r.ref=wild[0].id; r.refNote=`placa vale para todas as leituras com ${S.fields.filter(f=>wild[0].vals[f]!=null).map(f=>f+" "+r.vals[f]).join(", ")}`; } }
+}
+function status(r){
+  const c=cfg();
+  if(!r.use) return ["off","não usar"];
+  if(!r.ok && !r.edited) return ["bad","nome fora do modelo"];
+  const miss=S.fields.filter(f=>r.vals[f]==null||r.vals[f]==="");
+  if(miss.length) return ["bad","falta "+miss.join(", ")];
+  if(c.mode!=="none" && r.ref===null) return ["bad","sem placa"];
+  if(r.manual && c.mode==="name"){ const q=S.refs[r.ref]; if(q && S.fields.some(f=>q.vals[f]!=null&&q.vals[f]!==r.vals[f])) return ["warn","placa de outra"]; }
+  if(r.deduced.length||r.edited||(c.mode==="name"&&/deduzido/.test(r.refNote))||r.notes.some(n=>/O no lugar/.test(n))) return ["warn","conferir"];
+  return ["ok","ok"];
+}
+
+/* ---------- prévia e tabela ---------- */
+function renderPreview(parsed){
+  if(!S.files.length){ $("#preview").innerHTML=`<span class="hint">Carregue arquivos para ver como os nomes estão sendo lidos.</span>`; return; }
+  const idx=[]; const n=S.files.length; [0,Math.floor(n/3),Math.floor(2*n/3),n-1].forEach(i=>{ if(!idx.includes(i)) idx.push(i); });
+  const bad=parsed.map((r,i)=>i).filter(i=>!parsed[i].ok||parsed[i].missing.length).slice(0,2); bad.forEach(i=>{ if(!idx.includes(i)) idx.push(i); });
+  $("#preview").innerHTML=idx.map(i=>{ const r=parsed[i];
+    const kv=r.ok? S.fields.map(f=>`<span class="kv${r.vals[f]==null?" miss":""}">${esc(f)} = ${esc(r.vals[f]??"?")}</span>`).join(""):`<span class="kv miss">fora do modelo</span>`;
+    return `<div class="pv"><span class="fn">${esc(S.files[i].name)}</span>${r.isRef?`<span class="kv ref">placa</span>`:""}${kv}</div>`; }).join("");
+}
+function render(){
+  const c=cfg(), R=S.recs, st=R.map(status);
+  const n=k=>st.filter(s=>s[0]===k).length;
+  const groups=new Set(R.filter((r,i)=>st[i][0]==="ok"||st[i][0]==="warn").map(r=>JSON.stringify(S.fields.filter(f=>f!==c.avg).map(f=>r.vals[f]))));
+  $("#stats").innerHTML = R.length ? `<span class="chip"><b>${R.length}</b> leituras</span>${c.mode!=="none"?`<span class="chip"><b>${S.refs.length}</b> placas</span>`:""}
+    ${c.avg?`<span class="chip"><b>${groups.size}</b> médias</span>`:""}<span class="chip ok"><b>${n("ok")}</b> ok</span>
+    ${n("warn")?`<span class="chip warn"><b>${n("warn")}</b> para conferir</span>`:""}${n("bad")?`<span class="chip bad"><b>${n("bad")}</b> com problema</span>`:""}${n("off")?`<span class="chip"><b>${n("off")}</b> desmarcadas</span>`:""}`
+    : `<span class="chip">${S.files.length?"Nenhuma leitura encontrada: todos os arquivos parecem placas. Confira o marcador das placas.":"Carregue os arquivos para conferir."}</span>`;
+  let extra="";
+  if(c.mode==="name"){ const used=new Set(R.filter(r=>r.use&&r.ref!==null).map(r=>r.ref)); const orphan=S.refs.filter(q=>!used.has(q.id));
+    if(orphan.length) extra+=`<div class="callout info"><strong>Placas sem leitura (${orphan.length})</strong><br><span class="mono">${orphan.slice(0,40).map(q=>esc(q.base)).join(" · ")}${orphan.length>40?" …":""}</span><br><span class="muted">Normalmente indica uma leitura cujo arquivo não foi salvo.</span></div>`; }
+  $("#extraLists").innerHTML=extra;
+  const showRef=c.mode!=="none";
+  $("#pairTable thead").innerHTML=`<tr><th>Situação</th>${S.fields.map(f=>`<th>${esc(f)}</th>`).join("")}<th>Arquivo</th>${showRef?"<th>Placa usada</th>":""}<th>Usar</th><th>Observação</th></tr>`;
+  const only=$("#onlyIssues").checked;
+  const opts=[...S.refs].sort((x,y)=>x.base.localeCompare(y.base,"pt",{numeric:true}));
+  const rows=[]; let shown=0;
+  R.forEach((r,i)=>{ const [cls,label]=st[i]; if(only&&cls==="ok") return; if(++shown>600) return;
+    const sel=showRef?`<td><select class="cell" data-f="ref" aria-label="Placa usada"><option value="">— nenhuma —</option>${opts.map(q=>`<option value="${q.id}"${q.id===r.ref?" selected":""}>${esc(q.base)}</option>`).join("")}</select></td>`:"";
+    rows.push(`<tr data-i="${i}" class="${cls==="off"?"off":""}"><td><span class="chip ${cls==="off"?"":cls}">${esc(label)}</span></td>
+      ${S.fields.map(f=>`<td><input class="cell${f.length>6?" g":""}" data-f="v" data-k="${esc(f)}" value="${esc(r.vals[f]??"")}" aria-label="${esc(f)}"></td>`).join("")}
+      <td class="file">${esc(r.base)}</td>${sel}<td><input type="checkbox" data-f="use"${r.use?" checked":""} aria-label="Usar esta leitura"></td>
+      <td class="note">${esc([...r.notes,r.refNote].filter(Boolean).join("; "))}</td></tr>`); });
+  if(shown>600) rows.push(`<tr><td colspan="${S.fields.length+5}" class="note">Mostrando 600 de ${shown} linhas. Marque “Mostrar só as linhas com aviso” para ver os problemas.</td></tr>`);
+  $("#pairTable tbody").innerHTML=rows.join("");
+  $("#run").disabled=!R.some((r,i)=>st[i][0]==="ok"||st[i][0]==="warn");
+}
+$("#onlyIssues").addEventListener("change",render);
+$("#pairTable").addEventListener("change",e=>{
+  const tr=e.target.closest("tr[data-i]"); if(!tr) return; const r=S.recs[+tr.dataset.i]; const f=e.target.dataset.f;
+  if(f==="v"){ const k=e.target.dataset.k; const v=e.target.value.trim(); r.vals[k]=v===""?null:Core.normVal(v).v; r.ok=S.fields.every(x=>r.vals[x]!=null); r.edited=true; r.deduced=r.deduced.filter(x=>x!==k); autoRef(r); }
+  if(f==="ref"){ r.ref=e.target.value===""?null:+e.target.value; r.manual=true; r.refNote=r.ref===null?"":"placa escolhida manualmente"; }
+  if(f==="use") r.use=e.target.checked;
+  invalidate(); render();
+});
+function invalidate(){ S.results=null; $("#save").disabled=true; $("#results").hidden=true; $("#runInfo").textContent=""; }
+
+/* ---------- processamento ---------- */
+$("#run").addEventListener("click",()=>{
+  const c=cfg(); let lo=c.lo, hi=c.hi; if(c.full){ lo=-Infinity; hi=Infinity; }
+  if(!(hi>lo)){ toast("A faixa precisa terminar depois de começar."); return; }
+  const cache=new Map(); const spec=f=>{ if(!cache.has(f)) cache.set(f,Core.parseSSM(f.text)); return cache.get(f); };
+  const one=[], errors=[];
+  S.recs.forEach(r=>{ const [cls]=status(r); if(cls==="bad"||cls==="off") return;
+    const q=c.mode==="none"?null:S.refs[r.ref];
+    try{
+      const a=spec(r.file); if(a.wl.length<2) throw new Error("arquivo sem dados");
+      const sp = q ? Core.ratio(a,spec(q.file),lo,hi) : Core.ratio(a,{wl:a.wl,val:new Float64Array(a.wl.length).fill(1)},lo,hi);
+      if(!sp.wl.length) throw new Error("a faixa escolhida fica fora do espectro");
+      one.push({r,q,spec:sp,name:Core.render(c.tpl,r.vals)||r.base});
+    }catch(e){ errors.push(`${r.base}: ${e.message}`); }
+  });
+  let groups=[];
+  if(c.avg){ const m=new Map();
+    for(const o of one){ const key=JSON.stringify(S.fields.filter(f=>f!==c.avg).map(f=>o.r.vals[f])); if(!m.has(key)) m.set(key,[]); m.get(key).push(o); }
+    groups=[...m.values()].map(arr=>{ arr.sort((x,y)=>cmpV(x.r.vals[c.avg],y.r.vals[c.avg])); const v=arr[0].r.vals;
+      return { vals:v, name:Core.render(c.tpl,v,c.avg)||"média", items:arr, avg:Core.average(arr.map(o=>o.spec)) }; });
+    const of=orderFields().filter(f=>f!==c.avg); groups.sort((x,y)=>{ for(const f of of){ const d=cmpV(x.vals[f],y.vals[f]); if(d) return d; } return 0; });
+  }
+  S.results={c,lo:c.full?(one[0]?.spec.wl[0]??0):lo,hi:c.full?(one[0]?.spec.wl.at(-1)??1):hi,one,groups,errors};
+  $("#bandLo").textContent=(c.full?"espectro inteiro":lo+" nm"); $("#bandHi").textContent=c.full?"":hi+" nm";
+  const maxN=Math.max(0,...groups.map(g=>g.items.length)); const short=groups.filter(g=>g.items.length<maxN);
+  $("#resStats").innerHTML=`<span class="chip ok"><b>${one.length}</b> leituras processadas</span>`+(c.avg?`<span class="chip ok"><b>${groups.length}</b> médias</span>`:"")+
+    (short.length?`<span class="chip warn">${short.length} média(s) com menos leituras: ${short.slice(0,12).map(g=>`${esc(g.name)} (${g.items.length})`).join(", ")}${short.length>12?"…":""}</span>`:"")+
+    (errors.length?`<span class="chip bad">${errors.length} erro(s): ${esc(errors.slice(0,5).join("; "))}</span>`:"");
+  const list=c.avg?groups:one;
+  $("#plotLabel").textContent=c.avg?"Média":"Leitura";
+  $("#plotSel").innerHTML=list.map((g,i)=>`<option value="${i}">${esc(g.name)}${c.avg?` · ${g.items.length} leitura(s)`:""}</option>`).join("");
+  $("#results").hidden=false; $("#save").disabled=!one.length;
+  const np=(one[0]?.spec.wl.length)||0; $("#runInfo").textContent=np?`${np} pontos por espectro.`:"";
+  drawTree(); draw();
+});
+function folderOf(vals){ const c=S.results.c; return c.folder?`${cap(c.folder)} ${vals[c.folder]}/`:""; }
+function drawTree(){
+  const R=S.results; if(!R) return; const c=cfg(); R.c.one=c.one; R.c.many=c.many;
+  const cnt=(arr,get)=>{ const m=new Map(); arr.forEach(x=>{ const k=get(x); m.set(k,(m.get(k)||0)+1); }); return [...m.entries()]; };
+  let t="Resultados/\n";
+  const sub=(arr,get)=>R.c.folder?cnt(arr,get).map(([k,n])=>`│   ├── ${k}  (${n} arquivos)`).join("\n")+"\n":`│   └── ${arr.length} arquivos\n`;
+  if($("#outOne").checked) t+=`├── ${c.one}/\n`+sub(R.one,o=>folderOf(o.r.vals));
+  if($("#outAvg").checked&&R.c.avg) t+=`├── ${c.many}/\n`+sub(R.groups,g=>folderOf(g.vals));
+  if($("#outTable").checked) t+="├── Tabela única.csv\n";
+  if($("#outReport").checked) t+="└── Relatório de conferência.csv";
+  $("#zipTree").textContent=t;
+}
+["#outOne","#outAvg","#outTable","#outReport"].forEach(s=>$(s).addEventListener("change",drawTree));
+
+/* ---------- gráfico ---------- */
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function draw(){
+  const R=S.results; if(!R) return; const list=R.c.avg?R.groups:R.one; if(!list.length) return;
+  const g=list[+$("#plotSel").value||0]; const thin=R.c.avg?g.items.map(o=>o.spec):[]; const main=R.c.avg?g.avg:g.spec;
+  const cv=$("#chart"), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight; cv.width=W*dpr; cv.height=H*dpr;
+  const x=cv.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.fillStyle=cssVar("--surface"); x.fillRect(0,0,W,H);
+  const lo=main.wl[0], hi=main.wl[main.wl.length-1]; const m={l:48,r:14,t:14,b:34};
+  let ymax=0; [...thin,main].forEach(s=>s.val.forEach(v=>{ if(Number.isFinite(v)&&v>ymax&&v<50) ymax=v; })); ymax=Math.ceil(ymax*10)/10||1;
+  const X=w=>m.l+(w-lo)/(hi-lo)*(W-m.l-m.r), Y=v=>H-m.b-(Math.min(v,ymax)/ymax)*(H-m.t-m.b);
+  x.strokeStyle=cssVar("--plot-grid"); x.lineWidth=1; x.fillStyle=cssVar("--muted"); x.font="11px 'IBM Plex Mono', monospace";
+  const step=ymax>2?0.5:ymax>1?0.2:0.1;
+  for(let v=0;v<=ymax+1e-9;v+=step){ const y=Y(v); x.beginPath(); x.moveTo(m.l,y); x.lineTo(W-m.r,y); x.stroke(); x.textAlign="right"; x.fillText(v.toFixed(1).replace(".",","),m.l-6,y+4); }
+  const span=hi-lo, tick=span>600?100:span>250?50:20; x.textAlign="center";
+  for(let w=Math.ceil(lo/tick)*tick; w<=hi; w+=tick){ const px=X(w); x.beginPath(); x.moveTo(px,m.t); x.lineTo(px,H-m.b); x.stroke(); x.fillText(w,px,H-m.b+16); }
+  x.fillText("nm",W-m.r-8,H-4);
+  const line=(s,col,lw)=>{ x.strokeStyle=col; x.lineWidth=lw; x.beginPath(); let first=true; s.wl.forEach((w,i)=>{ const v=s.val[i]; if(!Number.isFinite(v)){first=true;return;} const px=X(w),py=Y(v); first?x.moveTo(px,py):x.lineTo(px,py); first=false; }); x.stroke(); };
+  thin.forEach(s=>line(s,cssVar("--plot-thin"),1.2)); line(main,cssVar("--accent"),2.4);
+}
+$("#plotSel").addEventListener("change",draw); window.addEventListener("resize",draw);
+
+/* ---------- zip e download ---------- */
+async function saveFile(filename,blob){
+  const dl=window.claude?.use?await window.claude.use("downloads"):null;
+  if(dl){ try{ await dl.save({filename,data:blob}); toast("Arquivo salvo."); }catch(e){ if(e?.code!=="declined") toast("Não foi possível salvar aqui ("+(e?.code||"erro")+")."); } return; }
+  if(window.claude){ toast("Download indisponível nesta visualização. Abra o aplicativo no claude.ai ou use a cópia .html."); return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
+}
+const safe=s=>String(s).replace(/[\\/:*?"<>|]/g,"_");
+$("#save").addEventListener("click",async()=>{
+  const R=S.results; if(!R) return; if(typeof JSZip==="undefined"){ toast("A biblioteca de .zip não carregou. Verifique a internet."); return; }
+  const c=cfg(); $("#save").disabled=true; $("#save").textContent="Gerando .zip…";
+  const z=new JSZip(), root=z.folder("Resultados"); const used=new Set();
+  const uniq=p=>{ let q=p, i=2; while(used.has(q)) q=p.replace(/\.csv$/,` (${i++}).csv`); used.add(q); return q; };
+  if($("#outOne").checked) for(const o of R.one){ const title=o.q?`Part of: ${o.r.base} divided by: ${o.q.base}`:`Part of: ${o.r.base}`;
+    root.file(uniq(`${safe(c.one)}/${folderOf(o.r.vals)}${safe(o.name)}.csv`), Core.toCSV(title,o.spec.wl,o.spec.val)); }
+  if($("#outAvg").checked&&R.c.avg) for(const g of R.groups) root.file(uniq(`${safe(c.many)}/${folderOf(g.vals)}${safe(g.name)}.csv`), Core.toCSV(g.name,g.avg.wl,g.avg.val));
+  if($("#outTable").checked){
+    const rows=R.c.avg?R.groups.map(g=>({name:g.name,vals:g.vals,n:g.items.length,s:g.avg})):R.one.map(o=>({name:o.name,vals:o.r.vals,n:1,s:o.spec}));
+    if(rows.length){ const fs=S.fields.filter(f=>f!==R.c.avg); const wl=rows[0].s.wl;
+      let s=["Nome",...fs,...(R.c.avg?["Leituras"]:[]),...Array.from(wl,w=>w.toFixed(3).replace(".",","))].join(";")+"\r\n";
+      for(const r of rows){ const v=r.s.wl.length===wl.length?r.s.val:Core.interp(wl,r.s.wl,r.s.val);
+        s+=[r.name,...fs.map(f=>r.vals[f]),...(R.c.avg?[r.n]:[]),...Array.from(v,x=>Core.g8(x).replace(".",","))].join(";")+"\r\n"; }
+      root.file("Tabela única.csv","﻿"+s); }
+  }
+  if($("#outReport").checked){
+    let s=["Arquivo",...S.fields,"Placa usada","Situação","Observação"].join(";")+"\r\n";
+    for(const r of S.recs){ const [,label]=status(r); const q=r.ref!=null&&R.c.mode!=="none"?S.refs[r.ref].base:"";
+      s+=[r.base,...S.fields.map(f=>r.vals[f]??""),q,label,[...r.notes,r.refNote].filter(Boolean).join(", ")].map(x=>String(x).replace(/;/g,",")).join(";")+"\r\n"; }
+    if(R.c.mode!=="none"){ const usedR=new Set(S.recs.filter(r=>r.use&&r.ref!=null).map(r=>r.ref)); for(const q of S.refs) if(!usedR.has(q.id)) s+=[q.base,...S.fields.map(()=>""),"","placa sem leitura",""].join(";")+"\r\n"; }
+    root.file("Relatório de conferência.csv","﻿"+s);
+  }
+  const blob=await z.generateAsync({type:"blob",compression:"DEFLATE"});
+  await saveFile("Resultados Espectroprocessamento.zip",blob);
+  $("#save").disabled=false; $("#save").textContent="Baixar resultados (.zip)";
+});
+$("#saveApp").addEventListener("click",()=>saveFile("Espectroprocessamento.html",new Blob(["<!doctype html>\n"+document.documentElement.outerHTML],{type:"text/html"})));
+})();
+</script>
+
+</body>
+</html>
