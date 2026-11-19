@@ -1,5 +1,7 @@
 # Spekta
 
+[![Testes](https://github.com/spekta-app/spekta-app.github.io/actions/workflows/testes.yml/badge.svg)](https://github.com/spekta-app/spekta-app.github.io/actions/workflows/testes.yml)
+
 Aplicativo para processar em lote as leituras de espectrorradiômetro (arquivos `.SSM` do SpectraWiz/StellarNet). Ele roda direto no navegador, não precisa de instalação e não envia nenhum arquivo para a internet.
 
 **Acesse:** https://spekta-app.github.io/
@@ -24,7 +26,7 @@ O cálculo foi comparado com o Spectroscopy Pro-Tools (v1.2.16.1) num experiment
 | Médias por parcela | 117 de 117 idênticas |
 | Maior diferença numérica | 0 |
 
-Detalhes do método na aba **Validação** do aplicativo.
+Uma implementação independente em Python confirmou os resultados nos mesmos dados, e 15 testes automáticos rodam a cada alteração do código. Detalhes, scripts de conferência (Python e R) e resultados em [validacao](validacao/README.md); o método também está na aba **Validação** do aplicativo.
 
 ## Como usar
 
